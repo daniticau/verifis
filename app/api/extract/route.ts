@@ -69,9 +69,12 @@ export async function POST(req: Request) {
 
     if (isSnippetMode) {
       // Snippet mode: faster, cheaper verification
-      const prompt = `Verify the factual accuracy of the highlighted snippet below.
-- Output a list of checkable claims with binary assessments ("likely true", "likely false", "uncertain") 
-- Provide confidence 0–1 and a one-sentence justification.
+      const prompt = 
+      
+`
+Verify the factual accuracy of the highlighted snippet below.
+- Output a list of 1-3 checkable claims with binary assessments ("likely true", "likely false", "uncertain") 
+- Calculate a confidence score 0–1 with two decimal places and a one-sentence justification.
 Return JSON only: { "claims": [ { "claim", "status", "confidence", "justification" } ] }.
 
 SNIPPET:
@@ -106,7 +109,10 @@ ${text}`;
       }
     } else {
       // Full page mode: standard claim extraction
-      const prompt = `Extract up to 8 atomic, checkable factual claims from the page text below.
+      const prompt = 
+      
+`
+Extract up to 8 atomic, checkable factual claims from the page text below.
 - One sentence per claim.
 - Prefer concrete numbers, definitions, product specs, health effects.
 - Avoid opinions or vague advice.

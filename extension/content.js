@@ -14,8 +14,8 @@
   const CONFIG = {
     MIN_SELECTION_LENGTH: 15,
     DEBOUNCE_DELAY: 600,
-    API_ENDPOINT: 'https://verifis.vercel.app/api/clip', // TODO: replace with your domain
-    OVERLAY_URL: 'https://verifis.vercel.app/overlay' // TODO: replace with your domain
+    API_ENDPOINT: 'http://localhost:3000/api/clip', // Change to your local URL
+    OVERLAY_URL: 'http://localhost:3000/overlay'    // Change to your local URL
   };
 
   // Load saved settings
