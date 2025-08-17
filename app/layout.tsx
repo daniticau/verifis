@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Veris",
+  title: "Verifis",
   description: "Every claim gets a receipt.",
 };
 

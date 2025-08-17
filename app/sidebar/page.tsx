@@ -28,12 +28,8 @@ function SidebarContent() {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ url }),
 			});
-			if (!res.ok) {
-				const data = (await res.json().catch(() => ({}))) as { error?: string };
-				const message = data?.error || 'Claim extraction failed. Please try again.';
-				throw new Error(`${res.status}:${message}`);
-			}
-			const data = (await res.json()) as ExtractResponse;
+			const data = await res.json();
+			if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 			return { data };
 		},
 		onSuccess: ({ data }) => {
@@ -41,17 +37,7 @@ function SidebarContent() {
 			setError(null);
 		},
 		onError: (err) => {
-			const [statusStr, message] = String(err.message).split(':', 2);
-			const status = Number(statusStr);
-			if (status === 502) {
-				setError(message || "Couldn't fetch that page (HTTP error). Try another URL.");
-			} else if (status === 500) {
-				setError('Claim extraction failed. Please try again.');
-			} else if (status === 400) {
-				setError('Please enter a valid URL.');
-			} else {
-				setError('Something went wrong. Please try again.');
-			}
+			setError(err.message);
 			setClaims(null);
 		},
 	});
@@ -77,7 +63,7 @@ function SidebarContent() {
 
 	return (
 		<div className="mx-auto h-screen max-w-[420px] overflow-y-auto px-4 py-6">
-			<h1 className="mb-2 text-2xl font-bold">Veris</h1>
+			<h1 className="mb-2 text-2xl font-bold">Verifis</h1>
 			<p className="mb-4 text-gray-600">Every claim gets a receipt.</p>
 			<form onSubmit={handleSubmit} className="mb-4 flex w-full flex-col gap-2">
 				<input

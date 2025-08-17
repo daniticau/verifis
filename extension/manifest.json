@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Verifis Reader + Clipper",
+  "version": "1.0.0",
+  "description": "Instantly verify highlighted text on any webpage with AI-powered fact checking",
+  
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  
+  "host_permissions": [
+    "https://verifis.vercel.app/*"
+  ],
+  
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  
+  "background": {
+    "service_worker": "background.js"
+  },
+  
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Verifis Reader + Clipper"
+  },
+  
+  "web_accessible_resources": [
+    {
+      "resources": ["overlay.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

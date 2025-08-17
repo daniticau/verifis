@@ -7,7 +7,7 @@ export async function fetchHtml(url: string): Promise<string> {
 	try {
 		const response = await fetch(url, {
 			headers: {
-				'User-Agent': 'Veris/0.1 (+https://veris.app)',
+				      'User-Agent': 'Verifis/0.1 (+https://verifis.app)',
 			},
 			redirect: 'follow',
 			signal: controller.signal,

@@ -1,7 +1,7 @@
 export default function Home() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-16">
-      <h1 className="mb-2 text-4xl font-bold">Veris</h1>
+      <h1 className="mb-2 text-4xl font-bold">Verifis</h1>
       <p className="mb-6 text-gray-600">Every claim gets a receipt.</p>
       <div className="mb-8">
         <a
