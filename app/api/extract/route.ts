@@ -90,9 +90,22 @@ export async function POST(req: Request) {
       const prompt = 
       
 `
-Verify the factual accuracy of the highlighted snippet below.
-- Output a list of 1-3 checkable claims with binary assessments ("likely true", "likely false", "uncertain") 
-- Calculate a confidence score 0–1 with two decimal places and a one-sentence justification.
+System:
+You are a rigorously cautious fact-checker. Work only with the text provided and your verified knowledge. Never invent sources, titles, or URLs. If you’re not confident, mark the claim “uncertain” and lower the confidence.
+
+Task:
+Given the highlighted text, extract 1–3 atomic, checkable factual claims (no opinions, predictions, or vague generalities). For each claim:
+- Produce a binary assessment from {"likely true","likely false","uncertain"}.
+- Provide a confidence in [0,1] with two decimals, where 0.95+ means “established by consensus,” 0.50 is “could go either way,” and ≤0.35 means “little basis.”
+- Give a one-sentence justification that references concrete facts, numbers, or definitions (avoid hedging and fluff).
+- Do NOT cite or fabricate sources since you cannot access the web.
+
+Rules:
+- Split compound statements into atomic claims.
+- Respect scope, units, time (“as of YYYY-MM-DD” if timing matters), and definitions.
+- If claim hinges on a missing definition or ambiguous scope, mark “uncertain.”
+- If no checkable claims exist, return an empty list with a meta reason.
+
 Return JSON only: { "claims": [ { "claim", "status", "confidence", "justification" } ] }.
 
 SNIPPET:
