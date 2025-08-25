@@ -13,13 +13,26 @@ const ClipSchema = z.object({
   text: z.string().min(1).max(10000), // Max 10k chars for snippets
 });
 
+// Helper function to add CORS headers
+function addCorsHeaders(response: NextResponse) {
+  response.headers.set('Access-Control-Allow-Origin', '*');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+  return response;
+}
+
+export async function OPTIONS() {
+  return addCorsHeaders(new NextResponse(null, { status: 200 }));
+}
+
 export async function POST(req: NextRequest) {
   try {
     const json = await req.json();
     const parsed = ClipSchema.safeParse(json);
     
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid clip data' }, { status: 400 });
+      const response = NextResponse.json({ error: 'Invalid clip data' }, { status: 400 });
+      return addCorsHeaders(response);
     }
 
     const { url, title, text } = parsed.data;
@@ -48,14 +61,16 @@ export async function POST(req: NextRequest) {
       sorted.slice(100).forEach(([key]) => clipStore.delete(key));
     }
 
-    return NextResponse.json({ 
+    const response = NextResponse.json({ 
       id: clipId,
       message: 'Clip created successfully'
     });
+    return addCorsHeaders(response);
 
   } catch (error) {
     console.error('Clip creation error:', error);
-    return NextResponse.json({ error: 'Failed to create clip' }, { status: 500 });
+    const response = NextResponse.json({ error: 'Failed to create clip' }, { status: 500 });
+    return addCorsHeaders(response);
   }
 }
 
@@ -65,18 +80,22 @@ export async function GET(req: NextRequest) {
     const clipId = searchParams.get('id');
     
     if (!clipId) {
-      return NextResponse.json({ error: 'Missing clip ID' }, { status: 400 });
+      const response = NextResponse.json({ error: 'Missing clip ID' }, { status: 400 });
+      return addCorsHeaders(response);
     }
 
     const clip = clipStore.get(clipId);
     if (!clip) {
-      return NextResponse.json({ error: 'Clip not found' }, { status: 404 });
+      const response = NextResponse.json({ error: 'Clip not found' }, { status: 404 });
+      return addCorsHeaders(response);
     }
 
-    return NextResponse.json(clip);
+    const response = NextResponse.json(clip);
+    return addCorsHeaders(response);
 
   } catch (error) {
     console.error('Clip retrieval error:', error);
-    return NextResponse.json({ error: 'Failed to retrieve clip' }, { status: 500 });
+    const response = NextResponse.json({ error: 'Failed to retrieve clip' }, { status: 500 });
+    return addCorsHeaders(response);
   }
 }

@@ -14,8 +14,8 @@
   const CONFIG = {
     MIN_SELECTION_LENGTH: 15,
     DEBOUNCE_DELAY: 600,
-    API_ENDPOINT: 'http://localhost:3000/api/clip', // Change to your local URL
-    OVERLAY_URL: 'http://localhost:3000/overlay'    // Change to your local URL
+    API_ENDPOINT: 'http://localhost:3000/api/clip', // Local development URL
+    OVERLAY_URL: 'http://localhost:3000/overlay'    // Local development URL
   };
 
   // Load saved settings

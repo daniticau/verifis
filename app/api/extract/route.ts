@@ -24,6 +24,18 @@ const SnippetClaimsSchema = z.object({
   })).max(5),
 });
 
+// Helper function to add CORS headers
+function addCorsHeaders(response: NextResponse) {
+  response.headers.set('Access-Control-Allow-Origin', '*');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+  return response;
+}
+
+export async function OPTIONS() {
+  return addCorsHeaders(new NextResponse(null, { status: 200 }));
+}
+
 async function fetchReadableText(url: string) {
   const res = await fetch(url, {
     headers: { "user-agent": "Verifis/0.1 (+https://verifis.app)" },
@@ -47,10 +59,16 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { url, text: snippetText, isSnippet } = body;
     
-    if (!url) return NextResponse.json({ error: "Missing url" }, { status: 400 });
+    if (!url) {
+      const response = NextResponse.json({ error: "Missing url" }, { status: 400 });
+      return addCorsHeaders(response);
+    }
 
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return NextResponse.json({ error: "Server missing OPENAI_API_KEY" }, { status: 500 });
+    if (!apiKey) {
+      const response = NextResponse.json({ error: "Server missing OPENAI_API_KEY" }, { status: 500 });
+      return addCorsHeaders(response);
+    }
 
     let text: string;
     let isSnippetMode = false;
@@ -87,7 +105,8 @@ ${text}`;
           prompt,
           temperature: 0.1, // Lower temperature for more consistent verification
         });
-        return NextResponse.json({ url, ...object });
+        const response = NextResponse.json({ url, ...object });
+        return addCorsHeaders(response);
       } catch (strictErr: any) {
         console.error("Snippet strict JSON failed:", strictErr?.message);
 
@@ -101,10 +120,12 @@ ${text}`;
         try {
           const parsed = JSON.parse(raw);
           const safe = SnippetClaimsSchema.parse(parsed);
-          return NextResponse.json({ url, ...safe });
+          const response = NextResponse.json({ url, ...safe });
+          return addCorsHeaders(response);
         } catch (fallbackErr: any) {
           console.error("Snippet fallback parse failed:", fallbackErr?.message, "LLM raw:", raw?.slice(0, 800));
-          return NextResponse.json({ error: "Snippet verification failed (JSON parse). Check logs." }, { status: 500 });
+          const response = NextResponse.json({ error: "Snippet verification failed (JSON parse). Check logs." }, { status: 500 });
+          return addCorsHeaders(response);
         }
       }
     } else {
@@ -131,7 +152,8 @@ ${text}`;
           temperature: 0.2,
         });
 
-        return NextResponse.json({ url, ...object });
+        const response = NextResponse.json({ url, ...object });
+        return addCorsHeaders(response);
       } catch (strictErr: any) {
         console.error("Strict JSON failed:", strictErr?.message);
 
@@ -145,10 +167,12 @@ ${text}`;
         try {
           const parsed = JSON.parse(raw);
           const safe = ClaimsSchema.parse(parsed);
-          return NextResponse.json({ url, ...safe });
+          const response = NextResponse.json({ url, ...safe });
+          return addCorsHeaders(response);
         } catch (fallbackErr: any) {
           console.error("Fallback parse failed:", fallbackErr?.message, "LLM raw:", raw?.slice(0, 800));
-          return NextResponse.json({ error: "Claim extraction failed (JSON parse). Check logs." }, { status: 500 });
+          const response = NextResponse.json({ error: "Claim extraction failed (JSON parse). Check logs." }, { status: 500 });
+          return addCorsHeaders(response);
         }
       }
     }
@@ -156,7 +180,8 @@ ${text}`;
     console.error("EXTRACT ERROR:", e?.message);
     const msg = String(e?.message || "Server error");
     const status = msg.startsWith("Fetch failed") || msg.includes("readable text") ? 502 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    const response = NextResponse.json({ error: msg }, { status });
+    return addCorsHeaders(response);
   }
 }
 

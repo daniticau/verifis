@@ -20,17 +20,22 @@ A Chrome extension that automatically verifies highlighted text on any webpage u
 3. Click "Load unpacked"
 4. Select the `extension/` folder from this project
 
-### 2. Update Domain Configuration
+### 2. Start the Backend Server
 
-Before testing, update the domain in `content.js`:
+The extension requires a local backend server to function:
 
-```javascript
-const CONFIG = {
-  // ... other config
-  API_ENDPOINT: 'https://verifis.vercel.app/api/clip', // Replace with your domain
-  OVERLAY_URL: 'https://verifis.vercel.app/overlay'    // Replace with your domain
-};
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
 ```
+
+The server will run on `http://localhost:3000` and provides:
+- `/api/clip` - Store and retrieve highlighted text
+- `/api/extract` - Extract and verify claims
+- `/overlay` - Overlay interface for results
 
 ### 3. Verify Installation
 
@@ -75,6 +80,13 @@ extension/
 ├── popup.js              # Popup logic
 ├── background.js         # Service worker
 └── README.md            # This file
+
+app/
+├── api/
+│   ├── clip/            # Clip storage API
+│   └── extract/         # Claim extraction API
+├── overlay/             # Overlay interface
+└── layout.tsx           # Root layout
 ```
 
 ## Configuration
@@ -91,35 +103,12 @@ const CONFIG = {
 
 ### API Endpoints
 
-The extension expects these endpoints on your Verifis backend:
+The extension expects these endpoints on your local backend:
 
 - `POST /api/clip` - Store highlighted text
 - `GET /api/clip?id=<id>` - Retrieve clip data  
 - `POST /api/extract` - Extract claims (supports snippet mode)
 - `GET /overlay?id=<id>&text=<text>` - Overlay interface
-
-## Troubleshooting
-
-### Extension Not Working
-
-1. Check Chrome console for errors
-2. Verify domain configuration in `content.js`
-3. Ensure extension is loaded and enabled
-4. Check if page has CSP blocking content scripts
-
-### Verification Fails
-
-1. Check browser network tab for API calls
-2. Verify OpenAI API key is set
-3. Check server logs for errors
-4. Ensure text selection is >15 characters
-
-### Overlay Not Appearing
-
-1. Check iframe creation in console
-2. Verify overlay URL is accessible
-3. Check for CSS conflicts on target page
-4. Ensure z-index is high enough
 
 ## Development
 
@@ -129,6 +118,12 @@ The extension expects these endpoints on your Verifis backend:
 2. Go to `chrome://extensions/`
 3. Click "Reload" on the Verifis extension
 4. Refresh test page
+
+### Backend Development
+
+1. Edit files in `app/` folder
+2. Server will auto-reload on changes
+3. Extension will use updated backend immediately
 
 ### Debug Mode
 
@@ -141,9 +136,17 @@ console.log('Verifis debug:', { selectionText, isVerifying, autoVerifyEnabled })
 ## Security Notes
 
 - Extension requests permission to run on all URLs
-- Only sends highlighted text to your API
+- Only sends highlighted text to your local API
 - No persistent data stored locally
 - Respects user toggle preferences
+
+## Environment Variables
+
+Create a `.env.local` file in the root directory:
+
+```bash
+OPENAI_API_KEY=your_openai_api_key_here
+```
 
 ## Next Steps
 
@@ -151,3 +154,4 @@ console.log('Verifis debug:', { selectionText, isVerifying, autoVerifyEnabled })
 - Implement persistent storage for clips
 - Add keyboard shortcuts for manual verification
 - Support for different verification modes
+- Deploy backend to production server

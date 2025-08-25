@@ -10,7 +10,7 @@
   ],
   
   "host_permissions": [
-    "https://verifis.vercel.app/*"
+    "http://localhost:3000/*"
   ],
   
   "content_scripts": [
