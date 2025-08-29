@@ -154,8 +154,17 @@ class BraveSearchProvider implements SearchProvider {
         score: 1.0 - (index * 0.05) // Higher base scores for Brave (premium API)
       }));
 
-      console.log(`Brave Search: Found ${results.length} results`);
-      return results;
+      // HARD BLACKLIST: Filter out Wikipedia results from Brave (we want diverse sources)
+      const filteredResults = results.filter((result: SearchResult) => {
+        const isWikipedia = result.url.includes('wikipedia.org') || result.url.includes('wikipedia.com');
+        if (isWikipedia) {
+          console.log(`🚫 Blacklisted Wikipedia result from Brave: ${result.url}`);
+        }
+        return !isWikipedia;
+      });
+
+      console.log(`Brave Search: Found ${results.length} results, filtered to ${filteredResults.length} non-Wikipedia results`);
+      return filteredResults;
     } catch (error) {
       console.error('Brave search error:', error);
       throw error;
@@ -436,22 +445,35 @@ export class SearchOrchestrator {
           if (braveResults.length > 0) {
             hasBraveResults = true;
             console.log(`🎯 Brave returned ${braveResults.length} results for query "${query}" - prioritizing Brave`);
+            // When Brave is available, ONLY collect Brave results, ignore others
+            allResults.push(...braveResults);
+          } else if (!hasBraveResults) {
+            // Only add non-Brave results if we haven't found any Brave results yet
+            allResults.push(...results);
           }
-          allResults.push(...results);
         }
       } catch (error) {
         console.warn(`Search failed for query "${query}":`, error);
       }
     }
     
-    // If we have Brave results, filter to ONLY Brave results
+    // If we have Brave results, filter to ONLY Brave results and ignore everything else
     if (hasBraveResults) {
       console.log('🎯 Filtering to ONLY Brave results (no mixing with other providers)');
       const braveOnlyResults = allResults.filter(r => r.source === 'brave');
       
+      // ADDITIONAL SAFETY: Blacklist any Wikipedia results that might have slipped through
+      const nonWikipediaResults = braveOnlyResults.filter(result => {
+        const isWikipedia = result.url.includes('wikipedia.org') || result.url.includes('wikipedia.com');
+        if (isWikipedia) {
+          console.log(`🚫 Final blacklist: Removed Wikipedia result from Brave: ${result.url}`);
+        }
+        return !isWikipedia;
+      });
+      
       // Deduplicate Brave results by URL and sort by score
       const uniqueBraveResults = new Map<string, SearchResult>();
-      for (const result of braveOnlyResults) {
+      for (const result of nonWikipediaResults) {
         if (!uniqueBraveResults.has(result.url) || uniqueBraveResults.get(result.url)!.score < result.score) {
           uniqueBraveResults.set(result.url, result);
         }

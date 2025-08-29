@@ -127,10 +127,10 @@ async function runFactCheckingPipeline(
     // If we have Brave results, filter out Wikipedia completely
     const hasBraveResults = searchResults.some(result => result.source === 'brave');
     if (hasBraveResults) {
-      console.log('🎯 Brave results detected - filtering out Wikipedia sources completely');
-      const braveOnlyResults = searchResults.filter(result => result.source !== 'wikipedia');
-      console.log(`🎯 After filtering Wikipedia: ${braveOnlyResults.length} results (was ${searchResults.length})`);
-      // Replace searchResults with Brave-only results
+      console.log('🎯 Brave results detected - filtering to ONLY Brave results (no mixing with other providers)');
+      const braveOnlyResults = searchResults.filter(result => result.source === 'brave');
+      console.log(`🎯 After filtering to Brave-only: ${braveOnlyResults.length} results (was ${searchResults.length})`);
+      // Replace searchResults with ONLY Brave results when Brave is available
       searchResults.splice(0, searchResults.length, ...braveOnlyResults);
     }
     

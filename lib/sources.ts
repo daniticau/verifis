@@ -193,6 +193,12 @@ export function deduplicateSources(sources: SearchResult[]): EnhancedSource[] {
       continue;
     }
     
+    // HARD BLACKLIST: Filter out Wikipedia sources completely (we want diverse sources)
+    if (domain.includes('wikipedia.org') || domain.includes('wikipedia.com')) {
+      console.log(`🚫 Blacklisted Wikipedia source at deduplication stage: ${source.url}`);
+      continue;
+    }
+    
     const existing = domainMap.get(domain);
     
     if (existing) {
