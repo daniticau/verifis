@@ -49,12 +49,14 @@
     CONFIG.API_ENDPOINT = `http://localhost:${currentPort}/api/clip`;
     CONFIG.OVERLAY_URL = `http://localhost:${currentPort}/overlay`;
     
-    // Mark extension as ready
+      // Mark extension as ready with a small delay to ensure proper initialization
+  setTimeout(() => {
     isExtensionReady = true;
     console.log('🚀 Verifis: Extension ready with endpoints:', {
       API: CONFIG.API_ENDPOINT,
       OVERLAY: CONFIG.OVERLAY_URL
     });
+  }, 100);
   }
 
   // Auto-detect port on script load
@@ -77,6 +79,17 @@
     });
   }
 
+  // Listen for storage changes to keep state in sync
+  chrome.storage.onChanged.addListener(function(changes, namespace) {
+    if (namespace === 'sync' && changes.autoVerifyHighlights) {
+      const newValue = changes.autoVerifyHighlights.newValue;
+      if (newValue !== undefined) {
+        autoVerifyEnabled = newValue;
+        console.log('Verifis auto-verify state synced from storage:', autoVerifyEnabled);
+      }
+    }
+  });
+
   // Listen for messages from popup
   chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.type === 'ping') {
@@ -87,9 +100,22 @@
         sendResponse({ status: 'error', message: 'Extension not ready' });
         return true;
       }
+      
+      // Update the local state
       autoVerifyEnabled = request.enabled;
-      console.log('Verifis auto-verify toggled:', autoVerifyEnabled);
-      sendResponse({ status: 'ok' });
+      
+      // Also update storage to ensure consistency
+      chrome.storage.sync.set({ autoVerifyHighlights: autoVerifyEnabled }, function() {
+        if (chrome.runtime.lastError) {
+          console.error('Failed to save toggle state to storage');
+          sendResponse({ status: 'error', message: 'Failed to save state' });
+        } else {
+          console.log('Verifis auto-verify toggled and saved:', autoVerifyEnabled);
+          sendResponse({ status: 'ok', enabled: autoVerifyEnabled });
+        }
+      });
+      
+      return true; // Keep message channel open for async response
     }
     return true;
   });
