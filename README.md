@@ -7,8 +7,8 @@ A lightweight backend server that powers the Verifis Chrome extension for AI-pow
 This project provides the essential backend services needed for the Verifis extension to function:
 
 - **Clip Storage API** (`/api/clip`) - Stores and retrieves highlighted text from web pages
-- **Claim Extraction API** (`/api/extract`) - Uses OpenAI to extract and verify factual claims
-- **Overlay Interface** (`/overlay`) - Clean, responsive UI for displaying verification results
+- **Claim Extraction API** (`/api/extract`) - Uses OpenAI + multi-source web search to extract and verify factual claims
+- **Overlay Interface** (`/overlay`) - Clean, responsive UI for displaying verification results with source citations
 
 ## Quick Start
 
@@ -20,11 +20,13 @@ npm install
 
 ### 2. Set Environment Variables
 
-Copy `env.example` to `.env.local` and add your OpenAI API key:
+Copy `env.example` to `.env.local` and add your API keys:
 
 ```bash
 cp env.example .env.local
-# Edit .env.local and add your OPENAI_API_KEY
+# Edit .env.local and add your API keys:
+# - OPENAI_API_KEY (required)
+# - At least one search API key (BING_API_KEY recommended)
 ```
 
 ### 3. Start Development Server
@@ -80,7 +82,7 @@ Retrieves stored clip data.
 ```
 
 ### POST /api/extract
-Extracts and verifies factual claims from text.
+Extracts and verifies factual claims from text using multi-source web search.
 
 **Request Body:**
 ```json
@@ -100,7 +102,17 @@ Extracts and verifies factual claims from text.
       "claim": "Factual claim from the text",
       "status": "likely true",
       "confidence": 0.85,
-      "justification": "This claim is supported by reliable sources..."
+      "justification": "This claim is supported by reliable sources...",
+      "sources": [
+        {
+          "title": "Source Title",
+          "url": "https://source.com/article",
+          "snippet": "Source description...",
+          "reliability": "high",
+          "quote": "Exact quote supporting the claim",
+          "domain": "source.com"
+        }
+      ]
     }
   ]
 }
@@ -110,11 +122,13 @@ Extracts and verifies factual claims from text.
 
 The Chrome extension provides:
 
-- **Auto-highlight verification** - Highlight any text to get instant verification
+- **Auto-highlight verification** - Highlight any text to get instant verification with web sources
 - **Smart debouncing** - 600ms delay prevents accidental triggers
-- **Snippet mode** - Fast verification for short text (<2k characters)
-- **Overlay interface** - Clean, iframe-based verification results
+- **Snippet mode** - Fast verification for short text (<2k characters) with 2-3 sources
+- **Full page mode** - Comprehensive analysis with 3+ sources and cross-referencing
+- **Overlay interface** - Clean, iframe-based verification results with source citations
 - **Toggle control** - Enable/disable auto-verification per page
+- **Source transparency** - View reliability ratings, domains, and relevant quotes
 
 ## Development
 
@@ -124,9 +138,14 @@ The Chrome extension provides:
 ├── app/
 │   ├── api/
 │   │   ├── clip/          # Clip storage API
-│   │   └── extract/       # Claim extraction API
-│   ├── overlay/           # Overlay interface
+│   │   └── extract/       # Claim extraction API with web search
+│   ├── overlay/           # Overlay interface with source display
 │   └── layout.tsx         # Root layout
+├── lib/
+│   ├── search.ts          # Multi-source search orchestration
+│   ├── fetchPage.ts       # Robust page fetching with caching
+│   ├── readability.ts     # Content extraction using Readability
+│   └── sources.ts         # Source reliability scoring and deduplication
 ├── extension/             # Chrome extension files
 ├── package.json           # Dependencies and scripts
 └── README.md             # This file
@@ -160,8 +179,47 @@ The Chrome extension provides:
 
 - **Next.js 15** - React framework for API routes and overlay
 - **OpenAI SDK** - AI-powered claim verification
-- **Cheerio** - HTML parsing for web content
+- **Multi-Source Search** - Bing, Google CSE, Brave, and DuckDuckGo fallback
+- **Content Extraction** - Mozilla Readability + JSDOM for article parsing
+- **Source Management** - Reliability scoring, deduplication, and caching
+- **Cheerio** - HTML parsing fallback
 - **Zod** - Runtime type validation
+
+## Web Search & Fact-Checking
+
+### Multi-Source Search with Smart Fallback
+Verifis uses a prioritized fallback system to ensure reliable fact-checking:
+
+1. **Brave Search API** (Highest Priority) - Privacy-focused, high-quality results
+2. **DuckDuckGo** (First Fallback) - Free, reliable alternative when Brave fails
+3. **Wikipedia** (Second Fallback) - Knowledge-based results when DuckDuckGo fails
+4. **Additional Providers** - Bing and Google CSE available as supplementary sources
+
+**Fallback Behavior:**
+- Brave is always tried first for best results (uses only Brave's own search results)
+- If Brave fails or returns no results, DuckDuckGo is automatically tried
+- If both Brave and DuckDuckGo fail completely, Wikipedia serves as the final fallback
+- This ensures users always get search results, even if premium APIs are unavailable
+- Brave never mixes with Wikipedia or other providers - it's a pure Brave search experience
+
+### Content Extraction Pipeline
+1. **Search Generation** - Creates focused queries from highlighted text
+2. **Multi-Source Search** - Searches across all available providers
+3. **Page Fetching** - Downloads and caches web pages with retry logic
+4. **Content Extraction** - Uses Mozilla Readability for clean article text
+5. **Source Enhancement** - Scores reliability and finds relevant quotes
+6. **AI Analysis** - OpenAI processes text + sources for verification
+
+### Source Reliability Scoring
+- **High**: Government (.gov), Education (.edu), International (.int), Fact-checking sites
+- **Medium**: Established news, Academic institutions, Reputable organizations
+- **Low**: Blog platforms, Social media, Questionable domains
+
+### Caching & Performance
+- Search results cached for 10-30 minutes
+- Fetched pages cached for 5-15 minutes
+- Rate limiting to protect API keys
+- Concurrent processing with limits
 
 ## License
 

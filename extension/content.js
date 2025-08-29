@@ -9,14 +9,65 @@
   let lastSelection = '';
   let isVerifying = false;
   let autoVerifyEnabled = true; // Default to enabled
+  let isExtensionReady = false; // Flag to indicate if extension is ready
 
   // Configuration
   const CONFIG = {
     MIN_SELECTION_LENGTH: 15,
-    DEBOUNCE_DELAY: 600,
-    API_ENDPOINT: 'http://localhost:3000/api/clip', // Local development URL
-    OVERLAY_URL: 'http://localhost:3000/overlay'    // Local development URL
+    DEBOUNCE_DELAY: 500,
+    API_ENDPOINT: 'http://localhost:3000/api/clip', // Primary port
+    OVERLAY_URL: 'http://localhost:3000/overlay',   // Primary port
+    FALLBACK_ENDPOINT: 'http://localhost:3001/api/clip', // Fallback port
+    FALLBACK_OVERLAY: 'http://localhost:3001/overlay',   // Fallback port
+    PORTS: [3000, 3001, 3002, 3003] // Try multiple ports
   };
+
+  // Port detection and fallback logic
+  let currentPort = 3000;
+  let isPortDetected = false;
+
+  // Function to detect which port is available
+  async function detectAvailablePort() {
+    if (isPortDetected) return;
+
+    for (const port of CONFIG.PORTS) {
+      try {
+        const response = await fetch(`http://localhost:${port}/api/clip`, {
+          method: 'OPTIONS',
+          mode: 'no-cors'
+        });
+        currentPort = port;
+        isPortDetected = true;
+        console.log(`✅ Verifis: Detected server on port ${port}`);
+        break;
+      } catch (error) {
+        console.log(`❌ Port ${port} not available`);
+      }
+    }
+
+    // Update endpoints with detected port
+    CONFIG.API_ENDPOINT = `http://localhost:${currentPort}/api/clip`;
+    CONFIG.OVERLAY_URL = `http://localhost:${currentPort}/overlay`;
+    
+    // Mark extension as ready
+    isExtensionReady = true;
+    console.log('🚀 Verifis: Extension ready with endpoints:', {
+      API: CONFIG.API_ENDPOINT,
+      OVERLAY: CONFIG.OVERLAY_URL
+    });
+  }
+
+  // Auto-detect port on script load
+  detectAvailablePort();
+  
+  // Fallback: ensure extension becomes ready even if port detection fails
+  setTimeout(() => {
+    if (!isExtensionReady) {
+      console.warn('Verifis: Port detection timeout, using default port 3000');
+      isExtensionReady = true;
+      console.log('🚀 Verifis: Extension ready with fallback endpoints');
+    }
+  }, 3000); // 3 second timeout
 
   // Load saved settings
   function loadSettings() {
@@ -29,8 +80,13 @@
   // Listen for messages from popup
   chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.type === 'ping') {
-      sendResponse({ status: 'ok' });
+      sendResponse({ status: 'ok', ready: isExtensionReady });
     } else if (request.type === 'toggleAutoVerify') {
+      if (!isExtensionReady) {
+        console.warn('Verifis: Extension not ready yet, ignoring toggle request');
+        sendResponse({ status: 'error', message: 'Extension not ready' });
+        return true;
+      }
       autoVerifyEnabled = request.enabled;
       console.log('Verifis auto-verify toggled:', autoVerifyEnabled);
       sendResponse({ status: 'ok' });

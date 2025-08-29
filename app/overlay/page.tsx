@@ -17,6 +17,14 @@ type SnippetClaim = {
   status: 'likely true' | 'likely false' | 'uncertain';
   confidence: number;
   justification: string;
+  sources: Array<{
+    title: string;
+    url: string;
+    snippet: string;
+    reliability: 'high' | 'medium' | 'low';
+    quote?: string;
+    domain: string;
+  }>;
 };
 
 function OverlayContent() {
@@ -145,6 +153,24 @@ function OverlayContent() {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
           }
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+          }
+          @keyframes fadeInOut {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+          }
+          @keyframes bounce {
+            0%, 80%, 100% { 
+              transform: scale(0);
+              opacity: 0.5;
+            }
+            40% { 
+              transform: scale(1);
+              opacity: 1;
+            }
+          }
         `}</style>
       </div>
     );
@@ -152,6 +178,18 @@ function OverlayContent() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: 'white' }}>
+      {/* CSS Animations */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.6; }
+        }
+      `}</style>
+      
       {/* Header */}
       <div style={{ 
         position: 'sticky', 
@@ -217,7 +255,6 @@ function OverlayContent() {
         {/* Snippet Text */}
         {snippetText && (
           <div style={{ marginBottom: '24px' }}>
-            <h2 style={{ fontSize: '14px', fontWeight: 500, color: '#374151', margin: '0 0 8px 0' }}>Highlighted Text</h2>
             <div style={{ 
               backgroundColor: '#eff6ff', 
               border: '1px solid #bfdbfe', 
@@ -253,7 +290,9 @@ function OverlayContent() {
         {/* Claims Section */}
         <div style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#111827', margin: 0 }}>Verification Results</h2>
+            <div>
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#111827', margin: 0 }}>Verification Results</h2>
+            </div>
             {!clip.isSnippet && (
               <button
                 onClick={() => extractClaims(clip.text)}
@@ -300,17 +339,30 @@ function OverlayContent() {
 
           {/* Loading State */}
           {loading && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
+              {/* Animated spinner */}
               <div style={{ 
-                width: '20px', 
-                height: '20px', 
-                border: '2px solid #e5e7eb', 
-                borderTop: '2px solid #3b82f6', 
+                width: '32px', 
+                height: '32px', 
+                border: '3px solid #e5e7eb', 
+                borderTop: '3px solid #3b82f6', 
                 borderRadius: '50%', 
-                animation: 'spin 1s linear infinite',
-                marginRight: '8px'
+                animation: 'spin 1.2s linear infinite',
+                marginBottom: '16px'
               }}></div>
-              <span style={{ color: '#4b5563' }}>Analyzing claims...</span>
+              
+              {/* Animated text */}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ 
+                  fontSize: '16px', 
+                  fontWeight: 500, 
+                  color: '#374151', 
+                  marginBottom: '8px',
+                  animation: 'pulse 2s ease-in-out infinite'
+                }}>
+                  🔍 Analyzing Claims
+                </div>
+              </div>
             </div>
           )}
 
@@ -337,7 +389,7 @@ function OverlayContent() {
                   padding: '16px' 
                 }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <h3 style={{ fontWeight: 500, color: '#111827', margin: 0, flex: 1, marginRight: '8px' }}>{claim.claim}</h3>
+                    <h3 style={{ fontWeight: 500, color: '#111827', margin: 0, flex: 1, marginRight: '8px', fontSize: '15px' }}>{claim.claim}</h3>
                     <span style={{
                       padding: '4px 8px',
                       fontSize: '12px',
@@ -351,10 +403,78 @@ function OverlayContent() {
                       {claim.status}
                     </span>
                   </div>
-                  <p style={{ fontSize: '14px', color: '#4b5563', margin: '0 0 8px 0' }}>{claim.justification}</p>
-                  <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                    Confidence: {(claim.confidence * 100).toFixed(0)}%
-                  </div>
+                  <p style={{ fontSize: '13px', color: '#4b5563', margin: '0 0 8px 0' }}>{claim.justification}</p>
+                  
+                  {/* Sources Display */}
+                  {claim.sources && claim.sources.length > 0 && (
+                    <div style={{ marginTop: '12px' }}>
+                      <h4 style={{ fontSize: '13px', fontWeight: 500, color: '#374151', margin: '0 0 8px 0' }}>Sources:</h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {claim.sources.map((source, sourceIndex) => (
+                          <div key={sourceIndex} style={{ 
+                            backgroundColor: '#f9fafb', 
+                            border: '1px solid #e5e7eb', 
+                            borderRadius: '6px', 
+                            padding: '12px' 
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '6px' }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <h5 style={{ fontSize: '13px', fontWeight: 500, color: '#111827', margin: '0 0 2px 0' }}>
+                                  {source.title}
+                                </h5>
+                                <div style={{ fontSize: '11px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <a 
+                                    href={source.url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    style={{ 
+                                      color: '#3b82f6', 
+                                      textDecoration: 'none',
+                                      wordBreak: 'break-all'
+                                    }}
+                                    onMouseOver={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                                    onMouseOut={(e) => e.currentTarget.style.textDecoration = 'none'}
+                                  >
+                                    {source.url}
+                                  </a>
+                                  <span style={{
+                                    padding: '2px 6px',
+                                    fontSize: '10px',
+                                    fontWeight: 500,
+                                    borderRadius: '9999px',
+                                    backgroundColor: source.reliability === 'high' ? '#dcfce7' : 
+                                                  source.reliability === 'medium' ? '#fef3c7' : '#fee2e2',
+                                    color: source.reliability === 'high' ? '#166534' : 
+                                           source.reliability === 'medium' ? '#92400e' : '#991b1b'
+                                  }}>
+                                    {source.reliability}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            {source.quote ? (
+                              <div style={{ 
+                                backgroundColor: '#f0f9ff', 
+                                border: '1px solid #bae6fd', 
+                                borderRadius: '4px', 
+                                padding: '8px', 
+                                marginBottom: '6px' 
+                              }}>
+                                <p style={{ fontSize: '12px', color: '#0369a1', margin: 0, fontStyle: 'italic', lineHeight: 1.4 }}>
+                                  "{source.quote}"
+                                </p>
+                              </div>
+                            ) : (
+                              <p style={{ fontSize: '12px', color: '#4b5563', margin: '0 0 6px 0', lineHeight: 1.4, fontStyle: 'italic' }}>
+                                No direct quote available
+                              </p>
+                            )}
+
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -411,6 +531,24 @@ export default function OverlayPage() {
           @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+          }
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+          }
+          @keyframes fadeInOut {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+          }
+          @keyframes bounce {
+            0%, 80%, 100% { 
+              transform: scale(0);
+              opacity: 0.5;
+            }
+            40% { 
+              transform: scale(1);
+              opacity: 1;
+            }
           }
         `}</style>
       </div>
