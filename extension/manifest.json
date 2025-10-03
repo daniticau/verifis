@@ -1,19 +1,18 @@
 {
   "manifest_version": 3,
-  "name": "Verifis Reader + Clipper",
-  "version": "1.0.0",
-  "description": "Instantly verify highlighted text on any webpage with AI-powered fact checking",
+  "name": "Verifis - Grok Live Search Fact Checker",
+  "version": "2.0.0",
+  "description": "AI-powered fact-checking with Grok Live Search and credibility scoring",
   
   "permissions": [
+    "contextMenus",
     "activeTab",
+    "scripting",
     "storage"
   ],
   
   "host_permissions": [
-    "http://localhost:3000/*",
-    "http://localhost:3001/*",
-    "http://localhost:3002/*",
-    "http://localhost:3003/*"
+    "<all_urls>"
   ],
   
   "content_scripts": [
@@ -30,13 +29,18 @@
   
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Verifis Reader + Clipper"
+    "default_title": "Verifis Fact Checker"
   },
   
-  "web_accessible_resources": [
-    {
-      "resources": ["overlay.html"],
-      "matches": ["<all_urls>"]
+  "options_page": "options.html",
+  
+  "commands": {
+    "fact-check-selection": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+F",
+        "mac": "Command+Shift+F"
+      },
+      "description": "Fact-check selected text"
     }
-  ]
+  }
 }

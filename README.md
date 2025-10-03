@@ -1,14 +1,18 @@
-# Verifis Extension Backend
+# Verifis - Grok Live Search Fact Checker
 
-A lightweight backend server that powers the Verifis Chrome extension for AI-powered fact checking.
+A Chrome extension that provides AI-powered fact-checking using Grok Live Search with credibility scoring and source analysis.
 
-## Overview
+## Features
 
-This project provides the essential backend services needed for the Verifis extension to function:
-
-- **Clip Storage API** (`/api/clip`) - Stores and retrieves highlighted text from web pages
-- **Claim Extraction API** (`/api/extract`) - Uses OpenAI + multi-source web search to extract and verify factual claims
-- **Overlay Interface** (`/overlay`) - Clean, responsive UI for displaying verification results with source citations
+- **Grok Live Search Integration**: Uses Grok's advanced AI with real-time web search
+- **Credibility Scoring**: AI-powered credibility assessment (0-100 scale)
+- **Source Analysis**: Detailed analysis of supporting/refuting evidence
+- **Fast Preview Mode**: Quick fact-checks using grok-3-mini
+- **Deep Analysis Mode**: Comprehensive analysis using grok-4-fast-reasoning
+- **Smart Caching**: Results cached for faster repeated queries
+- **Context Menu Integration**: Right-click to fact-check selected text
+- **Keyboard Shortcuts**: Ctrl+Shift+F (Cmd+Shift+F on Mac)
+- **Settings Page**: Configurable search parameters and preferences
 
 ## Quick Start
 
@@ -20,207 +24,253 @@ npm install
 
 ### 2. Set Environment Variables
 
-Copy `env.example` to `.env.local` and add your API keys:
+Create a `.env.local` file:
 
 ```bash
-cp env.example .env.local
-# Edit .env.local and add your API keys:
-# - OPENAI_API_KEY (required)
-# - At least one search API key (BING_API_KEY recommended)
+# Required: Grok API Key
+XAI_API_KEY=your_grok_api_key_here
+
+# Optional: Model Configuration
+GROK_MODEL_PRIMARY=grok-4-fast-reasoning
+GROK_MODEL_FAST=grok-3-mini
+
+# Optional: Search Configuration
+GROK_ALLOWED_SITES=nih.gov,who.int,nejm.org,jamanetwork.com
+GROK_MAX_RESULTS=8
+GROK_FROM_DATE=2023-01-01
+GROK_STRICT_WHITELIST=false
 ```
 
-### 3. Start Development Server
+### 3. Build the Extension
 
 ```bash
-npm run dev
+# Build for production
+npm run build:extension
+
+# Build for development (with watch mode)
+npm run build:extension:dev
 ```
 
-The server will run on `http://localhost:3000`
+### 4. Load in Chrome
 
-### 4. Load Extension
+1. Open Chrome and navigate to `chrome://extensions/`
+2. Enable "Developer mode" (toggle in top-right)
+3. Click "Load unpacked" and select the `extension` folder
+4. The extension should appear in your extensions list
 
-1. Open Chrome and go to `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked" and select the `extension/` folder
-4. The extension will now work with your local backend
+## Usage
 
-## API Endpoints
+### Fact-Checking Text
 
-### POST /api/clip
-Stores highlighted text from web pages.
+1. **Select text** on any webpage
+2. **Right-click** and choose "Fact-check selection"
+3. **Or use keyboard shortcut**: Ctrl+Shift+F (Cmd+Shift+F on Mac)
+4. **Or click the extension icon** and paste text manually
 
-**Request Body:**
-```json
-{
-  "url": "https://example.com/article",
-  "title": "Article Title",
-  "text": "Highlighted text content..."
-}
+### Popup Interface
+
+- Enter claim text in the textarea
+- Toggle "Fast preview" for quick analysis
+- Click "Fact Check" to analyze
+- View credibility score and source analysis
+- Copy JSON results to clipboard
+
+### Settings
+
+- Click the settings link in the popup
+- Configure allowed websites, search parameters
+- Adjust caching and performance settings
+- Set default models and preferences
+
+## Architecture
+
+### Core Components
+
+```
+src/
+├── shared/
+│   ├── config.ts          # Environment configuration
+│   └── types.ts           # TypeScript type definitions
+├── background/
+│   ├── index.ts           # Service worker entry point
+│   ├── clients/
+│   │   └── grok.ts        # Grok API client
+│   ├── factCheck.ts       # Fact-checking orchestration
+│   └── cache.ts           # Result caching system
+├── content/
+│   └── selection.ts       # Content script for text selection
+├── popup/
+│   ├── index.html         # Popup UI
+│   └── popup.ts           # Popup logic
+└── options/
+    ├── index.html         # Settings page
+    └── options.ts         # Settings logic
 ```
 
-**Response:**
-```json
-{
-  "id": "clip_1234567890_0",
-  "message": "Clip created successfully"
-}
-```
+### Fact-Checking Flow
 
-### GET /api/clip?id={clipId}
-Retrieves stored clip data.
+1. **Text Selection**: User selects text or enters manually
+2. **Grok Live Search**: Search for evidence with citations
+3. **AI Analysis**: Grok analyzes sources and provides credibility scores
+4. **Result Display**: Show summary, score, and source analysis
+5. **Caching**: Store results for faster repeated queries
 
-**Response:**
-```json
-{
-  "id": "clip_1234567890_0",
-  "url": "https://example.com/article",
-  "title": "Article Title",
-  "text": "Full text content...",
-  "isSnippet": false,
-  "createdAt": "2024-01-01T00:00:00.000Z"
-}
-```
+### API Integration
 
-### POST /api/extract
-Extracts and verifies factual claims from text using multi-source web search.
+The extension uses Grok's Live Search API with the following features:
 
-**Request Body:**
-```json
-{
-  "url": "https://example.com/article",
-  "text": "Text to analyze...",
-  "isSnippet": true
-}
-```
+- **Real-time Web Search**: Searches current web content
+- **Citation Extraction**: Automatically extracts source URLs
+- **Credibility Assessment**: AI-powered source reliability scoring
+- **Evidence Analysis**: Identifies supporting/refuting evidence
 
-**Response:**
-```json
-{
-  "url": "https://example.com/article",
-  "claims": [
-    {
-      "claim": "Factual claim from the text",
-      "status": "likely true",
-      "confidence": 0.85,
-      "justification": "This claim is supported by reliable sources...",
-      "sources": [
-        {
-          "title": "Source Title",
-          "url": "https://source.com/article",
-          "snippet": "Source description...",
-          "reliability": "high",
-          "quote": "Exact quote supporting the claim",
-          "domain": "source.com"
-        }
-      ]
-    }
-  ]
-}
-```
+## Configuration
 
-## Extension Features
+### Environment Variables
 
-The Chrome extension provides:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `XAI_API_KEY` | - | **Required** Grok API key |
+| `GROK_MODEL_PRIMARY` | `grok-4-fast-reasoning` | Model for deep analysis |
+| `GROK_MODEL_FAST` | `grok-3-mini` | Model for quick previews |
+| `GROK_ALLOWED_SITES` | `nih.gov,who.int,nejm.org,jamanetwork.com` | Trusted domains |
+| `GROK_MAX_RESULTS` | `8` | Max sources to analyze |
+| `GROK_FROM_DATE` | `2023-01-01` | Minimum source date |
+| `GROK_STRICT_WHITELIST` | `false` | Only search allowed sites |
 
-- **Auto-highlight verification** - Highlight any text to get instant verification with web sources
-- **Smart debouncing** - 600ms delay prevents accidental triggers
-- **Snippet mode** - Fast verification for short text (<2k characters) with 2-3 sources
-- **Full page mode** - Comprehensive analysis with 3+ sources and cross-referencing
-- **Overlay interface** - Clean, iframe-based verification results with source citations
-- **Toggle control** - Enable/disable auto-verification per page
-- **Source transparency** - View reliability ratings, domains, and relevant quotes
+### Extension Settings
+
+Accessible via the settings page:
+
+- **Search Configuration**: Allowed sites, max results, date filters
+- **Performance Settings**: Caching, fast preview defaults
+- **Model Selection**: Primary and fast model preferences
 
 ## Development
 
+### Building
+
+```bash
+# Install dependencies
+npm install
+
+# Build extension
+npm run build:extension
+
+# Development build with watch
+npm run build:extension:dev
+
+# Clean build artifacts
+npm run clean
+```
+
+### Testing
+
+```bash
+# Run backend server (for API testing)
+npm run dev
+
+# Load extension in Chrome
+# 1. Go to chrome://extensions/
+# 2. Enable Developer mode
+# 3. Click "Load unpacked"
+# 4. Select the extension folder
+```
+
 ### Project Structure
 
+- **Backend**: Next.js API routes for clip storage
+- **Extension**: Chrome extension with TypeScript
+- **Shared**: Common types and configuration
+- **Build**: Webpack configuration for extension bundling
+
+## API Reference
+
+### Fact-Check Request
+
+```typescript
+interface FactCheckRequest {
+  claim: string;
+  pageUrl?: string;
+  pageTitle?: string;
+  useFastModel?: boolean;
+}
 ```
-├── app/
-│   ├── api/
-│   │   ├── clip/          # Clip storage API
-│   │   └── extract/       # Claim extraction API with web search
-│   ├── overlay/           # Overlay interface with source display
-│   └── layout.tsx         # Root layout
-├── lib/
-│   ├── search.ts          # Multi-source search orchestration
-│   ├── fetchPage.ts       # Robust page fetching with caching
-│   ├── readability.ts     # Content extraction using Readability
-│   └── sources.ts         # Source reliability scoring and deduplication
-├── extension/             # Chrome extension files
-├── package.json           # Dependencies and scripts
-└── README.md             # This file
+
+### Fact-Check Response
+
+```typescript
+interface FactCheckResult {
+  claim: string;
+  overall: number; // 0-100 credibility score
+  summary: string;
+  sources: {
+    url: string;
+    domain: string;
+    stance: 'supports' | 'refutes' | 'mixed';
+    credibility: number;
+    evidence: string[];
+  }[];
+  processingTime?: number;
+  model?: string;
+}
 ```
 
-### Available Scripts
+## Privacy & Security
 
-- `npm run dev` - Start development server with hot reload
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run lint` - Run linting
+- **No Data Collection**: Extension doesn't collect user data
+- **Local Processing**: Fact-checking happens via API calls only
+- **Secure Storage**: Settings stored locally in Chrome storage
+- **API Key Security**: Keys never logged or transmitted unnecessarily
+- **Minimal Permissions**: Only requests necessary Chrome permissions
 
-### Making Changes
+## Troubleshooting
 
-1. **Backend changes** - Edit files in `app/` folder, server auto-reloads
-2. **Extension changes** - Edit files in `extension/` folder, reload extension in Chrome
+### Common Issues
 
-## Deployment
+1. **"XAI_API_KEY not found"**
+   - Set your Grok API key in `.env.local`
+   - Restart the development server
 
-### Local Development
-- Server runs on `http://localhost:3000`
-- Extension configured for localhost
-- Perfect for development and testing
+2. **"No sources found"**
+   - Check your internet connection
+   - Verify API key is valid
+   - Try adjusting search parameters in settings
 
-### Production
-- Deploy backend to your preferred hosting service
-- Update extension URLs in `extension/content.js`
-- Update `extension/manifest.json` host permissions
+3. **Extension not loading**
+   - Ensure all files are built in the `extension` folder
+   - Check Chrome developer console for errors
+   - Verify manifest.json is valid
 
-## Dependencies
+4. **Fact-checking fails**
+   - Check Chrome extension console for errors
+   - Verify API key has sufficient credits
+   - Try with shorter text selections
 
-- **Next.js 15** - React framework for API routes and overlay
-- **OpenAI SDK** - AI-powered claim verification
-- **Multi-Source Search** - Bing, Google CSE, Brave, and DuckDuckGo fallback
-- **Content Extraction** - Mozilla Readability + JSDOM for article parsing
-- **Source Management** - Reliability scoring, deduplication, and caching
-- **Cheerio** - HTML parsing fallback
-- **Zod** - Runtime type validation
+### Debug Mode
 
-## Web Search & Fact-Checking
+Enable debug logging by opening Chrome DevTools:
 
-### Multi-Source Search with Smart Fallback
-Verifis uses a prioritized fallback system to ensure reliable fact-checking:
-
-1. **Brave Search API** (Highest Priority) - Privacy-focused, high-quality results
-2. **DuckDuckGo** (First Fallback) - Free, reliable alternative when Brave fails
-3. **Wikipedia** (Second Fallback) - Knowledge-based results when DuckDuckGo fails
-4. **Additional Providers** - Bing and Google CSE available as supplementary sources
-
-**Fallback Behavior:**
-- Brave is always tried first for best results (uses only Brave's own search results)
-- If Brave fails or returns no results, DuckDuckGo is automatically tried
-- If both Brave and DuckDuckGo fail completely, Wikipedia serves as the final fallback
-- This ensures users always get search results, even if premium APIs are unavailable
-- Brave never mixes with Wikipedia or other providers - it's a pure Brave search experience
-
-### Content Extraction Pipeline
-1. **Search Generation** - Creates focused queries from highlighted text
-2. **Multi-Source Search** - Searches across all available providers
-3. **Page Fetching** - Downloads and caches web pages with retry logic
-4. **Content Extraction** - Uses Mozilla Readability for clean article text
-5. **Source Enhancement** - Scores reliability and finds relevant quotes
-6. **AI Analysis** - OpenAI processes text + sources for verification
-
-### Source Reliability Scoring
-- **High**: Government (.gov), Education (.edu), International (.int), Fact-checking sites
-- **Medium**: Established news, Academic institutions, Reputable organizations
-- **Low**: Blog platforms, Social media, Questionable domains
-
-### Caching & Performance
-- Search results cached for 10-30 minutes
-- Fetched pages cached for 5-15 minutes
-- Rate limiting to protect API keys
-- Concurrent processing with limits
+1. Right-click extension icon → "Inspect popup"
+2. Check Console tab for detailed logs
+3. Background script logs in Extensions page
 
 ## License
 
 Private project - All rights reserved.
+
+## Changelog
+
+### v2.0.0
+- Complete rewrite with Grok Live Search integration
+- Added credibility scoring system
+- Implemented fast preview mode
+- Added comprehensive settings page
+- Improved UI/UX with modern design
+- Added caching and rate limiting
+- Enhanced error handling and validation
+
+### v1.0.0
+- Initial release with basic fact-checking
+- OpenAI integration
+- Simple popup interface

@@ -1,348 +1,494 @@
-// Verifis Reader + Clipper Content Script
-// Automatically verifies highlighted text on any webpage
-
-(function() {
-  'use strict';
-
-  let overlayIframe = null;
-  let debounceTimer = null;
-  let lastSelection = '';
-  let isVerifying = false;
-  let autoVerifyEnabled = true; // Default to enabled
-  let isExtensionReady = false; // Flag to indicate if extension is ready
-
-  // Configuration
-  const CONFIG = {
-    MIN_SELECTION_LENGTH: 15,
-    DEBOUNCE_DELAY: 500,
-    API_ENDPOINT: 'http://localhost:3000/api/clip', // Primary port
-    OVERLAY_URL: 'http://localhost:3000/overlay',   // Primary port
-    FALLBACK_ENDPOINT: 'http://localhost:3001/api/clip', // Fallback port
-    FALLBACK_OVERLAY: 'http://localhost:3001/overlay',   // Fallback port
-    PORTS: [3000, 3001, 3002, 3003] // Try multiple ports
-  };
-
-  // Port detection and fallback logic
-  let currentPort = 3000;
-  let isPortDetected = false;
-
-  // Function to detect which port is available
-  async function detectAvailablePort() {
-    if (isPortDetected) return;
-
-    for (const port of CONFIG.PORTS) {
-      try {
-        const response = await fetch(`http://localhost:${port}/api/clip`, {
-          method: 'OPTIONS',
-          mode: 'no-cors'
+/******/ (() => { // webpackBootstrap
+/******/ 	"use strict";
+class SelectionHandler {
+    constructor() {
+        this.isInitialized = false;
+        this.debounceTimer = null;
+        this.lastSelectedText = '';
+        this.isProcessing = false;
+        this.DEBOUNCE_DELAY = 1000; // 1 second delay after selection
+        this.MIN_TEXT_LENGTH = 20; // Minimum text length to trigger fact-check
+        this.init();
+    }
+    init() {
+        if (this.isInitialized)
+            return;
+        console.log('🔍 Verifis content script initialized with auto fact-checking');
+        console.log('🔍 Debug: Setting up event listeners...');
+        console.log('🔍 CONTENT SCRIPT IS RUNNING - CHECK PAGE CONSOLE');
+        // Also show a visible notification to confirm content script is running
+        this.showNotification('Verifis content script loaded!', 'info');
+        // Set up extension context invalidation detection
+        this.setupContextInvalidationDetection();
+        // Listen for messages from background script
+        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            if (message.type === 'FACT_CHECK_REQUEST') {
+                this.handleFactCheckRequest(message, sendResponse);
+                return true; // Keep message channel open
+            }
         });
-        currentPort = port;
-        isPortDetected = true;
-        console.log(`✅ Verifis: Detected server on port ${port}`);
-        break;
-      } catch (error) {
-        console.log(`❌ Port ${port} not available`);
-      }
+        // Listen for text selection changes
+        document.addEventListener('selectionchange', () => {
+            this.handleSelectionChange();
+        });
+        // Listen for mouse up (when selection is complete)
+        document.addEventListener('mouseup', () => {
+            // Small delay to ensure selection is complete
+            setTimeout(() => this.handleSelectionChange(), 100);
+        });
+        // Listen for keyboard shortcuts (manual override)
+        document.addEventListener('keydown', (event) => {
+            if (event.ctrlKey && event.shiftKey && event.key === 'F') {
+                event.preventDefault();
+                this.triggerFactCheck();
+            }
+        });
+        this.isInitialized = true;
     }
-
-    // Update endpoints with detected port
-    CONFIG.API_ENDPOINT = `http://localhost:${currentPort}/api/clip`;
-    CONFIG.OVERLAY_URL = `http://localhost:${currentPort}/overlay`;
-    
-      // Mark extension as ready with a small delay to ensure proper initialization
-  setTimeout(() => {
-    isExtensionReady = true;
-    console.log('🚀 Verifis: Extension ready with endpoints:', {
-      API: CONFIG.API_ENDPOINT,
-      OVERLAY: CONFIG.OVERLAY_URL
-    });
-  }, 100);
-  }
-
-  // Auto-detect port on script load
-  detectAvailablePort();
-  
-  // Fallback: ensure extension becomes ready even if port detection fails
-  setTimeout(() => {
-    if (!isExtensionReady) {
-      console.warn('Verifis: Port detection timeout, using default port 3000');
-      isExtensionReady = true;
-      console.log('🚀 Verifis: Extension ready with fallback endpoints');
+    // Set up extension context invalidation detection
+    setupContextInvalidationDetection() {
+        // Listen for extension context invalidation
+        chrome.runtime.onConnect.addListener((port) => {
+            port.onDisconnect.addListener(() => {
+                if (chrome.runtime.lastError) {
+                    console.warn('Extension context invalidated, resetting state');
+                    this.isProcessing = false;
+                    this.debounceTimer = null;
+                    this.showNotification('Extension reloaded. Please refresh the page for full functionality.', 'warning');
+                }
+            });
+        });
     }
-  }, 3000); // 3 second timeout
-
-  // Load saved settings
-  function loadSettings() {
-    chrome.storage.sync.get(['autoVerifyHighlights'], function(result) {
-      autoVerifyEnabled = result.autoVerifyHighlights !== false; // Default to true
-      console.log('Verifis auto-verify:', autoVerifyEnabled ? 'enabled' : 'disabled');
-    });
-  }
-
-  // Listen for storage changes to keep state in sync
-  chrome.storage.onChanged.addListener(function(changes, namespace) {
-    if (namespace === 'sync' && changes.autoVerifyHighlights) {
-      const newValue = changes.autoVerifyHighlights.newValue;
-      if (newValue !== undefined) {
-        autoVerifyEnabled = newValue;
-        console.log('Verifis auto-verify state synced from storage:', autoVerifyEnabled);
-      }
-    }
-  });
-
-  // Listen for messages from popup
-  chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-    if (request.type === 'ping') {
-      sendResponse({ status: 'ok', ready: isExtensionReady });
-    } else if (request.type === 'toggleAutoVerify') {
-      if (!isExtensionReady) {
-        console.warn('Verifis: Extension not ready yet, ignoring toggle request');
-        sendResponse({ status: 'error', message: 'Extension not ready' });
-        return true;
-      }
-      
-      // Update the local state
-      autoVerifyEnabled = request.enabled;
-      
-      // Also update storage to ensure consistency
-      chrome.storage.sync.set({ autoVerifyHighlights: autoVerifyEnabled }, function() {
-        if (chrome.runtime.lastError) {
-          console.error('Failed to save toggle state to storage');
-          sendResponse({ status: 'error', message: 'Failed to save state' });
-        } else {
-          console.log('Verifis auto-verify toggled and saved:', autoVerifyEnabled);
-          sendResponse({ status: 'ok', enabled: autoVerifyEnabled });
+    // Handle automatic text selection changes
+    async handleSelectionChange() {
+        console.log('🔍 Debug: handleSelectionChange called');
+        const selection = this.getCurrentSelection();
+        if (!selection) {
+            console.log('🔍 Debug: No selection found');
+            // Clear any pending debounce timer if no selection
+            if (this.debounceTimer) {
+                clearTimeout(this.debounceTimer);
+                this.debounceTimer = null;
+            }
+            return;
         }
-      });
-      
-      return true; // Keep message channel open for async response
+        console.log('🔍 Debug: Selection found:', selection.text.substring(0, 50) + '...');
+        // Check if auto fact-checking is enabled
+        const settings = await this.getSettings();
+        console.log('🔍 Debug: Settings loaded:', settings);
+        if (!settings.autoFactCheckEnabled) {
+            console.log('🔍 Debug: Auto fact-checking is disabled');
+            return;
+        }
+        // Check if text is long enough and different from last selection
+        if (selection.text.length < settings.minTextLength) {
+            console.log(`🔍 Debug: Text too short (${selection.text.length} < ${settings.minTextLength})`);
+            return;
+        }
+        if (selection.text === this.lastSelectedText) {
+            console.log('🔍 Debug: Same text as last selection, skipping');
+            return;
+        }
+        if (this.isProcessing) {
+            console.log('🔍 Debug: Already processing a fact-check, skipping');
+            return;
+        }
+        // Clear any existing timer
+        if (this.debounceTimer) {
+            clearTimeout(this.debounceTimer);
+        }
+        // Show selection indicator
+        this.showSelectionIndicator(selection.text);
+        // Set up debounced fact-check with user-configured delay
+        console.log(`🔍 Debug: Setting up debounce timer for ${settings.autoFactCheckDelay} seconds`);
+        this.debounceTimer = setTimeout(() => {
+            console.log('🔍 Debug: Debounce timer fired, calling autoFactCheck');
+            this.autoFactCheck(selection);
+        }, settings.autoFactCheckDelay * 1000);
     }
-    return true;
-  });
-
-  // Debounced function to handle text selection
-  function debouncedVerify(selectionText) {
-    if (!autoVerifyEnabled) return; // Skip if disabled
-    
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
+    // Get extension settings
+    async getSettings() {
+        try {
+            // Check if extension context is still valid
+            if (!chrome.runtime?.id) {
+                console.warn('Extension context invalidated, using defaults');
+                return {
+                    autoFactCheckEnabled: true,
+                    autoFactCheckDelay: 1,
+                    minTextLength: 20
+                };
+            }
+            const stored = await chrome.storage.sync.get([
+                'autoFactCheckEnabled',
+                'autoFactCheckDelay',
+                'minTextLength'
+            ]);
+            return {
+                autoFactCheckEnabled: stored.autoFactCheckEnabled ?? true,
+                autoFactCheckDelay: stored.autoFactCheckDelay ?? 1,
+                minTextLength: stored.minTextLength ?? 20
+            };
+        }
+        catch (error) {
+            console.warn('Failed to load settings, using defaults:', error);
+            return {
+                autoFactCheckEnabled: true,
+                autoFactCheckDelay: 1,
+                minTextLength: 20
+            };
+        }
     }
-
-    debounceTimer = setTimeout(() => {
-      if (selectionText && selectionText.length >= CONFIG.MIN_SELECTION_LENGTH) {
-        verifySelection(selectionText);
-      }
-    }, CONFIG.DEBOUNCE_DELAY);
-  }
-
-  // Main verification function
-  async function verifySelection(selectionText) {
-    if (isVerifying || selectionText === lastSelection) return;
-    
-    isVerifying = true;
-    lastSelection = selectionText;
-
-    try {
-      // Show verification indicator
-      showVerificationIndicator();
-
-      // Prepare clip data
-      const clipData = {
-        url: window.location.href,
-        title: document.title,
-        text: selectionText.trim()
-      };
-
-      // Send to API
-      const response = await fetch(CONFIG.API_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(clipData)
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const result = await response.json();
-      
-      // Show overlay with verification results
-      showOverlay(result.id, selectionText);
-
-    } catch (error) {
-      console.error('Verifis verification failed:', error);
-      showErrorToast('Could not verify snippet');
-    } finally {
-      isVerifying = false;
-      hideVerificationIndicator();
+    // Automatically fact-check selected text
+    autoFactCheck(selection) {
+        console.log('🔍 Debug: autoFactCheck called');
+        // Check if extension context is still valid
+        if (!chrome.runtime?.id) {
+            console.warn('Extension context invalidated, cannot send fact-check request');
+            this.isProcessing = false; // Reset processing flag
+            this.showNotification('Extension context invalidated. Please reload the page.', 'error');
+            return;
+        }
+        if (this.isProcessing) {
+            console.log('🔍 Debug: Already processing, returning');
+            return;
+        }
+        this.isProcessing = true;
+        this.lastSelectedText = selection.text;
+        console.log(`🔍 Auto fact-checking: "${selection.text.substring(0, 50)}..."`);
+        console.log('🔍 Debug: About to send message to background script');
+        // Show processing indicator
+        this.showNotification('Auto fact-checking selected text...', 'info');
+        // Send to background for processing
+        console.log('🔍 Debug: Sending message to background...');
+        chrome.runtime.sendMessage({
+            type: 'FACT_CHECK_REQUEST',
+            payload: {
+                claim: selection.text,
+                pageUrl: selection.pageUrl,
+                pageTitle: selection.pageTitle,
+                useFastModel: true // Use fast model for auto fact-checking
+            }
+        }, (response) => {
+            console.log('🔍 Debug: Received response from background:', response);
+            this.isProcessing = false;
+            if (chrome.runtime.lastError) {
+                console.error('🔍 Debug: Chrome runtime error:', chrome.runtime.lastError);
+                this.showNotification(`Extension error: ${chrome.runtime.lastError.message}`, 'error');
+                return;
+            }
+            // Handle the response structure from background script
+            const payload = response?.payload || response;
+            if (payload && payload.success) {
+                console.log('🔍 Debug: Fact-check successful:', payload.result);
+                this.showFactCheckResult(payload.result);
+                // Show brief success notification
+                this.showNotification(`✅ Fact-check complete! Score: ${payload.result.overall}/100`, 'info');
+                // Request background script to open the extension popup
+                this.openExtensionPopup();
+            }
+            else {
+                const error = payload?.error || 'Fact-check failed';
+                console.error('🔍 Debug: Fact-check failed:', error);
+                this.showNotification(`❌ Auto fact-check failed: ${error}`, 'error');
+            }
+        });
     }
-  }
-
-  // Show overlay iframe
-  function showOverlay(clipId, selectionText) {
-    if (!overlayIframe) {
-      overlayIframe = document.createElement('iframe');
-      overlayIframe.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        width: 400px;
-        height: 600px;
-        border: none;
-        border-radius: 12px;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-        z-index: 2147483647;
-        background: white;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    // Handle fact-check request from background
+    handleFactCheckRequest(message, sendResponse) {
+        const selection = this.getCurrentSelection();
+        if (!selection) {
+            sendResponse({
+                success: false,
+                error: 'No text selected'
+            });
+            return;
+        }
+        // Send to background for processing
+        chrome.runtime.sendMessage({
+            type: 'FACT_CHECK_REQUEST',
+            payload: {
+                claim: selection.text,
+                pageUrl: selection.pageUrl,
+                pageTitle: selection.pageTitle
+            }
+        }, (response) => {
+            sendResponse(response);
+        });
+    }
+    // Get current text selection
+    getCurrentSelection() {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) {
+            console.log('🔍 Debug: No selection or no ranges');
+            return null;
+        }
+        const selectedText = selection.toString().trim();
+        console.log(`🔍 Debug: Selected text length: ${selectedText.length}`);
+        if (!selectedText || selectedText.length < 10) {
+            console.log(`🔍 Debug: Text too short or empty (${selectedText.length} < 10)`);
+            return null;
+        }
+        const range = selection.getRangeAt(0);
+        return {
+            text: selectedText,
+            pageUrl: window.location.href,
+            pageTitle: document.title,
+            selectionRange: {
+                start: range.startOffset,
+                end: range.endOffset
+            }
+        };
+    }
+    // Trigger fact-check for current selection
+    triggerFactCheck() {
+        const selection = this.getCurrentSelection();
+        if (!selection) {
+            this.showNotification('Please select some text to fact-check', 'warning');
+            return;
+        }
+        this.showNotification('Fact-checking selected text...', 'info');
+        // Send to background for processing
+        chrome.runtime.sendMessage({
+            type: 'FACT_CHECK_REQUEST',
+            payload: {
+                claim: selection.text,
+                pageUrl: selection.pageUrl,
+                pageTitle: selection.pageTitle
+            }
+        }, (response) => {
+            if (response.success) {
+                this.showFactCheckResult(response.result);
+            }
+            else {
+                this.showNotification(`Fact-check failed: ${response.error}`, 'error');
+            }
+        });
+    }
+    // Show selection indicator
+    showSelectionIndicator(text) {
+        // Remove existing indicator
+        const existing = document.getElementById('verifis-selection-indicator');
+        if (existing) {
+            existing.remove();
+        }
+        // Get selection position
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0)
+            return;
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        // Create indicator element
+        const indicator = document.createElement('div');
+        indicator.id = 'verifis-selection-indicator';
+        indicator.style.cssText = `
+      position: fixed;
+      left: ${rect.left}px;
+      top: ${rect.top - 35}px;
+      background: #3b82f6;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      z-index: 2147483647;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      pointer-events: none;
+      animation: fadeIn 0.2s ease-out;
+    `;
+        indicator.textContent = 'Verifis will fact-check this...';
+        // Add CSS animation
+        if (!document.getElementById('verifis-styles')) {
+            const style = document.createElement('style');
+            style.id = 'verifis-styles';
+            style.textContent = `
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(5px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
       `;
-      document.body.appendChild(overlayIframe);
+            document.head.appendChild(style);
+        }
+        document.body.appendChild(indicator);
+        // Auto-remove after 2 seconds
+        setTimeout(() => {
+            if (indicator.parentNode) {
+                indicator.remove();
+            }
+        }, 2000);
     }
-
-    // Update overlay with new clip
-    overlayIframe.src = `${CONFIG.OVERLAY_URL}?id=${clipId}&text=${encodeURIComponent(selectionText)}`;
-    
-    // Make overlay visible
-    overlayIframe.style.display = 'block';
-  }
-
-  // Hide overlay
-  function hideOverlay() {
-    if (overlayIframe) {
-      overlayIframe.style.display = 'none';
-    }
-  }
-
-  // Show verification indicator
-  function showVerificationIndicator() {
-    // Add subtle highlight glow to selected text
-    const selection = window.getSelection();
-    if (selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      
-      const indicator = document.createElement('div');
-      indicator.id = 'verifis-indicator';
-      indicator.style.cssText = `
-        position: fixed;
-        left: ${rect.left}px;
-        top: ${rect.top - 30}px;
-        background: #3b82f6;
-        color: white;
-        padding: 4px 8px;
-        border-radius: 6px;
-        font-size: 12px;
-        font-weight: 500;
-        z-index: 2147483646;
-        pointer-events: none;
-        animation: fadeIn 0.2s ease-out;
-      `;
-      indicator.textContent = 'Verifis verifying...';
-      
-      // Add CSS animation
-      if (!document.getElementById('verifis-styles')) {
-        const style = document.createElement('style');
-        style.id = 'verifis-styles';
-        style.textContent = `
-          @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(5px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-        `;
-        document.head.appendChild(style);
-      }
-      
-      document.body.appendChild(indicator);
-    }
-  }
-
-  // Hide verification indicator
-  function hideVerificationIndicator() {
-    const indicator = document.getElementById('verifis-indicator');
-    if (indicator) {
-      indicator.remove();
-    }
-  }
-
-  // Show error toast
-  function showErrorToast(message) {
-    const toast = document.createElement('div');
-    toast.style.cssText = `
+    // Show notification
+    showNotification(message, type = 'info') {
+        // Remove existing notification
+        const existing = document.getElementById('verifis-notification');
+        if (existing) {
+            existing.remove();
+        }
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.id = 'verifis-notification';
+        notification.style.cssText = `
       position: fixed;
       top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #ef4444;
+      right: 20px;
+      background: ${type === 'error' ? '#ef4444' : type === 'warning' ? '#f59e0b' : '#3b82f6'};
       color: white;
-      padding: 12px 20px;
+      padding: 12px 16px;
       border-radius: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 14px;
       font-weight: 500;
-      z-index: 2147483646;
+      z-index: 2147483647;
       box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      max-width: 300px;
+      word-wrap: break-word;
     `;
-    toast.textContent = message;
-    
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-      toast.remove();
-    }, 3000);
-  }
-
-  // Event listeners
-  function handleSelectionChange() {
-    const selection = window.getSelection();
-    const selectionText = selection.toString().trim();
-    
-    if (selectionText && selectionText.length >= CONFIG.MIN_SELECTION_LENGTH) {
-      debouncedVerify(selectionText);
-    } else {
-      // Clear timer if selection is too short
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-        debounceTimer = null;
-      }
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        // Auto-remove after 3 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 3000);
     }
-  }
-
-  function handleMouseUp() {
-    // Small delay to ensure selection is complete
-    setTimeout(handleSelectionChange, 50);
-  }
-
-  function handleKeyDown(event) {
-    // Close overlay with ESC
-    if (event.key === 'Escape') {
-      hideOverlay();
+    // Show fact-check result
+    showFactCheckResult(result) {
+        console.log('🔍 Debug: Showing fact-check result:', result);
+        // The main popup opening is handled in autoFactCheck method
+        // This method is kept for potential future use or manual fact-checking
+        console.log('🔍 Fact-check result ready for popup display');
     }
-  }
-
-  // Initialize
-  function init() {
-    // Load settings first
-    loadSettings();
-    
-    // Listen for selection changes
-    document.addEventListener('selectionchange', handleSelectionChange);
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('keydown', handleKeyDown);
-    
-    // Listen for messages from overlay (for closing)
-    window.addEventListener('message', (event) => {
-      if (event.data.type === 'verifis-close-overlay') {
-        hideOverlay();
-      }
+    // Open extension popup
+    openExtensionPopup() {
+        try {
+            console.log('🔍 Debug: Requesting extension popup to open...');
+            chrome.runtime.sendMessage({ type: 'OPEN_POPUP' });
+        }
+        catch (error) {
+            console.error('🔍 Debug: Failed to request popup opening:', error);
+        }
+    }
+    // Show detailed result overlay
+    showResultOverlay(result) {
+        // Remove existing overlay
+        const existing = document.getElementById('verifis-result-overlay');
+        if (existing) {
+            existing.remove();
+        }
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'verifis-result-overlay';
+        overlay.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 500px;
+      max-width: 90vw;
+      max-height: 80vh;
+      background: white;
+      border: 2px solid #3b82f6;
+      border-radius: 16px;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+      z-index: 2147483647;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow-y: auto;
+      animation: slideIn 0.3s ease-out;
+    `;
+        // Score badge
+        const scoreColor = result.overall >= 70 ? '#dcfce7' : result.overall >= 40 ? '#fef3c7' : '#fee2e2';
+        const scoreTextColor = result.overall >= 70 ? '#166534' : result.overall >= 40 ? '#92400e' : '#991b1b';
+        overlay.innerHTML = `
+      <div style="padding: 24px; border-bottom: 1px solid #e5e7eb; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h3 style="margin: 0; font-size: 20px; font-weight: 600;">🔍 Verifis Fact-Check Result</h3>
+          <button id="verifis-close-overlay" style="background: rgba(255,255,255,0.2); border: none; font-size: 20px; cursor: pointer; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">×</button>
+        </div>
+        <div style="background: ${scoreColor}; color: ${scoreTextColor}; padding: 12px 16px; border-radius: 8px; font-weight: 600; text-align: center; font-size: 16px;">
+          Overall Score: ${result.overall}/100
+        </div>
+      </div>
+      <div style="padding: 20px;">
+        <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #374151;">Summary:</h4>
+        <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.5; color: #4b5563;">${result.summary}</p>
+        <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #374151;">Sources (${result.sources.length}):</h4>
+        <div style="max-height: 300px; overflow-y: auto;">
+          ${result.sources.map((source, index) => `
+            <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 8px; background: #f9fafb;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 12px; font-weight: 500; color: #6b7280;">${source.domain}</span>
+                <span style="padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; background: ${source.stance === 'supports' ? '#dcfce7' : source.stance === 'refutes' ? '#fee2e2' : '#fef3c7'}; color: ${source.stance === 'supports' ? '#166534' : source.stance === 'refutes' ? '#991b1b' : '#92400e'};">${source.stance}</span>
+              </div>
+              <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px;">Credibility: ${source.credibility}/100</div>
+              <div style="font-size: 12px; color: #374151;">
+                ${source.evidence.map((evidence) => `• ${evidence}`).join('<br>')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div style="margin-top: 16px; text-align: center;">
+          <button id="verifis-open-popup" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 12px; cursor: pointer;">Open in Extension</button>
+        </div>
+      </div>
+    `;
+        // Add CSS animation
+        if (!document.getElementById('verifis-overlay-styles')) {
+            const style = document.createElement('style');
+            style.id = 'verifis-overlay-styles';
+            style.textContent = `
+        @keyframes slideIn {
+          from { 
+            opacity: 0; 
+            transform: translate(-50%, -50%) scale(0.9); 
+          }
+          to { 
+            opacity: 1; 
+            transform: translate(-50%, -50%) scale(1); 
+          }
+        }
+      `;
+            document.head.appendChild(style);
+        }
+        document.body.appendChild(overlay);
+        // Close button
+        const closeBtn = overlay.querySelector('#verifis-close-overlay');
+        closeBtn?.addEventListener('click', () => {
+            overlay.remove();
+        });
+        // Close on background click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+            }
+        });
+        // Close on Escape key
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                overlay.remove();
+                document.removeEventListener('keydown', handleEscape);
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+        // Auto-close after 60 seconds (longer for better UX)
+        setTimeout(() => {
+            if (overlay.parentNode) {
+                overlay.remove();
+                document.removeEventListener('keydown', handleEscape);
+            }
+        }, 60000);
+    }
+}
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        new SelectionHandler();
     });
-    
-    console.log('Verifis Reader + Clipper initialized');
-  }
+}
+else {
+    new SelectionHandler();
+}
 
-  // Start when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-})();
+
+/******/ })()
+;
