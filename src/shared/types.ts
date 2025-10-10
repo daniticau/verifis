@@ -52,7 +52,7 @@ export interface FactCheckResponse {
 
 // Background script message types
 export interface BackgroundMessage {
-  type: 'FACT_CHECK_REQUEST' | 'FACT_CHECK_RESPONSE' | 'ERROR';
+  type: 'FACT_CHECK_REQUEST' | 'FACT_CHECK_RESPONSE' | 'ERROR' | 'SETTINGS_UPDATED' | 'OPEN_POPUP' | 'AUTO_FACT_CHECK_RESULT';
   payload?: any;
 }
 

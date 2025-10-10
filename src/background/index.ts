@@ -1,5 +1,5 @@
 // Background service worker for Grok Live Search fact-checking
-import { config, validateConfig } from '../shared/config';
+import { config, validateConfig, GrokConfig } from '../shared/config';
 import { FactCheckService } from './factCheck';
 import { factCheckCache } from './cache';
 import { 
