@@ -48,7 +48,6 @@ cd packages/shared-types && npm install && npm run build && cd ../..
 GEMINI_API_KEY=your_gemini_api_key_here
 EXTENSION_SHARED_SECRET=your_random_secret_string
 PORT=3000
-GEMINI_MODEL=gemini-2.0-flash-exp
 ```
 
 **Extension** - Create `extension/.env.local`:
