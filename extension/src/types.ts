@@ -1,11 +1,33 @@
-import type {
-  FactcheckRequest,
-  FactcheckResponse,
-  Claim,
-  Source,
-} from "@verifis/shared-types";
+// Types for the fact-check extension (inlined from shared-types for standalone build)
 
-export type { FactcheckRequest, FactcheckResponse, Claim, Source };
+export interface FactcheckRequest {
+  text: string;
+  url?: string;
+  language?: string;
+}
+
+export interface Source {
+  title: string;
+  url: string;
+  snippet: string;
+  domain: string;
+  stance?: "supports" | "contradicts" | "unclear";
+  confidence?: number;
+}
+
+export interface Claim {
+  claim: string;
+  summary?: string;
+  sources: Source[];
+}
+
+export interface FactcheckResponse {
+  claims: Claim[];
+  meta?: {
+    truncated?: boolean;
+    error?: string;
+  };
+}
 
 export interface TabFactcheckData {
   text: string;

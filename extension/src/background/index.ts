@@ -1,6 +1,7 @@
 import { MAX_SELECTION_CHARS } from "../constants";
-import { factcheckText } from "./api";
-import { storeTabData, getStorageKey } from "./storage";
+import { factcheckTextWithGemini } from "./gemini-client";
+import { storeTabData } from "./storage";
+import { isAutoOpenPopupEnabled } from "../storage/settings";
 import type {
   ExtensionMessage,
   CheckSelectionMessage,
@@ -56,11 +57,8 @@ async function handleCheckSelection(
   await storeTabData(tabId, loadingData);
 
   try {
-    // Call backend
-    const result = await factcheckText({
-      text,
-      url: message.url,
-    });
+    // Call Gemini API directly
+    const result = await factcheckTextWithGemini(text);
 
     // Store result
     const finalData: TabFactcheckData = {
@@ -76,6 +74,15 @@ async function handleCheckSelection(
       type: "FACTCHECK_RESULT",
       payload: result,
     } as ExtensionMessage);
+
+    // Auto-open the popup after fact check completes (if enabled)
+    const autoOpen = await isAutoOpenPopupEnabled();
+    if (autoOpen) {
+      chrome.action.openPopup().catch(() => {
+        // openPopup may fail if user is not focused on the browser
+        // This is expected behavior, so we silently ignore the error
+      });
+    }
   } catch (error) {
     // Store error state
     const errorData: TabFactcheckData = {

@@ -1,4 +1,4 @@
-import type { FactcheckResponse, Claim } from "../types";
+import type { FactcheckResponse, Claim, Source } from "../types";
 
 let tooltipElement: HTMLDivElement | null = null;
 
@@ -87,7 +87,7 @@ export function createTooltip(claims: Claim[]): HTMLDivElement {
       const sourcesDiv = document.createElement("div");
       sourcesDiv.style.cssText = "font-size: 12px; color: #6b7280;";
 
-      topSources.forEach((source) => {
+      topSources.forEach((source: Source) => {
         const sourceLink = document.createElement("a");
         sourceLink.href = source.url;
         sourceLink.target = "_blank";
