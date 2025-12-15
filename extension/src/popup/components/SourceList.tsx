@@ -35,7 +35,7 @@ export default function SourceList({ sources }: SourceListProps) {
                 <span>{source.domain}</span>
                 {source.confidence !== undefined && (
                   <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs">
-                    {Math.round(source.confidence * 100)}% match
+                    {Math.round(source.confidence > 1 ? source.confidence : source.confidence * 100)}% match
                   </span>
                 )}
                 {source.stance && (

@@ -100,12 +100,22 @@ Do not include any markdown formatting, code blocks, or additional text. Only ou
           }
         }
 
+        // Normalize confidence: if > 1, assume it's a percentage and convert to 0-1 range
+        let confidence = s.confidence;
+        if (typeof confidence === "number") {
+          if (confidence > 1) {
+            confidence = confidence / 100;
+          }
+          // Clamp to 0-1 range
+          confidence = Math.max(0, Math.min(1, confidence));
+        }
+
         return {
           title: s.title || "Untitled",
           url: s.url,
           snippet: s.snippet.substring(0, 300) || "",
           domain: domain || "unknown",
-          confidence: typeof s.confidence === "number" ? s.confidence : undefined,
+          confidence: typeof confidence === "number" ? confidence : undefined,
         };
       });
 

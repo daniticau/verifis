@@ -1,7 +1,6 @@
 import { SELECTION_STABLE_MS, MAX_SELECTION_CHARS } from "../constants";
 import { debounce } from "./debounce";
-import { showTooltip, showErrorTooltip, removeTooltip } from "./tooltip";
-import type { ExtensionMessage, FactcheckResultMessage } from "../types";
+import type { ExtensionMessage } from "../types";
 
 let currentSelection: string = "";
 let currentRange: Range | null = null;
@@ -25,11 +24,9 @@ function getSelectionRange(): Range | null {
 
 function checkSelection(): void {
   const text = getSelectionText();
-  const range = getSelectionRange();
 
-  // If selection is empty or changed, clear tooltip
+  // If selection is empty or changed, reset state
   if (!text || text !== currentSelection) {
-    removeTooltip();
     currentSelection = "";
     currentRange = null;
     return;
@@ -40,10 +37,10 @@ function checkSelection(): void {
     // Still send, backend will handle truncation
   }
 
-  // Store current range for tooltip positioning
-  currentRange = range;
+  // Store current range
+  currentRange = getSelectionRange();
 
-  // Send message to background
+  // Send message to background (data will be stored and available in popup)
   chrome.runtime.sendMessage(
     {
       type: "CHECK_SELECTION",
@@ -53,46 +50,25 @@ function checkSelection(): void {
     (response) => {
       if (chrome.runtime.lastError) {
         console.error("Extension error:", chrome.runtime.lastError);
-        if (currentRange) {
-          showErrorTooltip(
-            chrome.runtime.lastError.message || "Unknown error",
-            currentRange
-          );
-        }
         return;
       }
 
       if (!response.success) {
-        if (currentRange) {
-          showErrorTooltip(
-            response.error || "Failed to fact-check selection",
-            currentRange
-          );
-        }
+        console.error("Factcheck failed:", response.error);
       }
-      // Success case handled by message listener below
+      // Success - data is stored by background script, available in popup
     }
   );
 }
 
-// Listen for results from background
+// Listen for results from background (data is already stored, no need to show tooltip)
 chrome.runtime.onMessage.addListener(
   (message: ExtensionMessage, _sender, _sendResponse) => {
     if (message.type === "FACTCHECK_RESULT") {
-      const resultMessage = message as FactcheckResultMessage;
-
-      if (resultMessage.error) {
-        if (currentRange) {
-          showErrorTooltip(resultMessage.error, currentRange);
-        }
-        return;
-      }
-
-      if (resultMessage.payload && currentRange) {
-        showTooltip(resultMessage.payload, currentRange);
-      } else if (currentRange) {
-        // Empty result
-        showTooltip({ claims: [] }, currentRange);
+      // Data is already stored by background script
+      // No tooltip display - user can view results in extension popup
+      if (message.error) {
+        console.error("Factcheck error:", message.error);
       }
     }
   }
@@ -102,9 +78,8 @@ chrome.runtime.onMessage.addListener(
 function handleSelectionChange(): void {
   const text = getSelectionText();
 
-  // If selection cleared, remove tooltip
+  // If selection cleared, reset state
   if (!text) {
-    removeTooltip();
     currentSelection = "";
     currentRange = null;
     return;
@@ -133,9 +108,4 @@ function handleSelectionChange(): void {
 // Listen to selection events
 document.addEventListener("selectionchange", handleSelectionChange);
 document.addEventListener("mouseup", handleSelectionChange);
-
-// Clean up on page unload
-window.addEventListener("beforeunload", () => {
-  removeTooltip();
-});
 

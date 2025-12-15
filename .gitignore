@@ -16,3 +16,6 @@ api/dist/
 # Shared types build output
 packages/shared-types/dist/
 
+# claude
+.claude/
+
