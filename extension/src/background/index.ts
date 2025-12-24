@@ -1,11 +1,12 @@
 import { MAX_SELECTION_CHARS } from "../constants";
-import { factcheckTextWithGemini } from "./gemini-client";
-import { storeTabData } from "./storage";
+import { factcheckTextWithGemini, explainTextWithGemini } from "./gemini-client";
+import { storeTabData, storeExplainTabData } from "./storage";
 import { isAutoOpenPopupEnabled } from "../storage/settings";
 import type {
   ExtensionMessage,
   CheckSelectionMessage,
   TabFactcheckData,
+  TabExplainData,
 } from "../types";
 
 chrome.runtime.onMessage.addListener(
@@ -15,20 +16,33 @@ chrome.runtime.onMessage.addListener(
     sendResponse: (response: any) => void
   ) => {
     if (message.type === "CHECK_SELECTION") {
-      handleCheckSelection(message, sender.tab?.id)
-        .then((result) => {
-          sendResponse({ success: true, result });
-        })
-        .catch((error) => {
-          console.error("Factcheck error:", error);
-          sendResponse({ success: false, error: error.message });
-        });
+      const mode = message.mode || "factcheck";
+
+      if (mode === "explain") {
+        handleExplainSelection(message, sender.tab?.id)
+          .then((result) => {
+            sendResponse({ success: true, result });
+          })
+          .catch((error) => {
+            console.error("Explain error:", error);
+            sendResponse({ success: false, error: error.message });
+          });
+      } else {
+        handleFactcheckSelection(message, sender.tab?.id)
+          .then((result) => {
+            sendResponse({ success: true, result });
+          })
+          .catch((error) => {
+            console.error("Factcheck error:", error);
+            sendResponse({ success: false, error: error.message });
+          });
+      }
       return true; // Keep channel open for async response
     }
   }
 );
 
-async function handleCheckSelection(
+async function handleFactcheckSelection(
   message: CheckSelectionMessage,
   tabId: number | undefined
 ): Promise<void> {
@@ -97,6 +111,83 @@ async function handleCheckSelection(
     // Send error to content script
     chrome.tabs.sendMessage(tabId, {
       type: "FACTCHECK_RESULT",
+      payload: null,
+      error: error instanceof Error ? error.message : "Unknown error",
+    } as ExtensionMessage);
+
+    throw error;
+  }
+}
+
+async function handleExplainSelection(
+  message: CheckSelectionMessage,
+  tabId: number | undefined
+): Promise<void> {
+  if (!tabId) {
+    throw new Error("No tab ID available");
+  }
+
+  // Validate and truncate text
+  let text = message.text.trim();
+  if (text.length === 0) {
+    throw new Error("Empty text selection");
+  }
+
+  const truncated = text.length > MAX_SELECTION_CHARS;
+  if (truncated) {
+    text = text.substring(0, MAX_SELECTION_CHARS);
+  }
+
+  // Store loading state
+  const loadingData: TabExplainData = {
+    text: message.text,
+    url: message.url,
+    result: null,
+    timestamp: Date.now(),
+  };
+  await storeExplainTabData(tabId, loadingData);
+
+  try {
+    // Call Gemini API for explanation
+    const result = await explainTextWithGemini(text);
+
+    // Store result
+    const finalData: TabExplainData = {
+      text: message.text,
+      url: message.url,
+      result,
+      timestamp: Date.now(),
+    };
+    await storeExplainTabData(tabId, finalData);
+
+    // Send message to content script
+    chrome.tabs.sendMessage(tabId, {
+      type: "EXPLAIN_RESULT",
+      payload: result,
+    } as ExtensionMessage);
+
+    // Auto-open the popup after explain completes (if enabled)
+    const autoOpen = await isAutoOpenPopupEnabled();
+    if (autoOpen) {
+      chrome.action.openPopup().catch(() => {
+        // openPopup may fail if user is not focused on the browser
+        // This is expected behavior, so we silently ignore the error
+      });
+    }
+  } catch (error) {
+    // Store error state
+    const errorData: TabExplainData = {
+      text: message.text,
+      url: message.url,
+      result: null,
+      timestamp: Date.now(),
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+    await storeExplainTabData(tabId, errorData);
+
+    // Send error to content script
+    chrome.tabs.sendMessage(tabId, {
+      type: "EXPLAIN_RESULT",
       payload: null,
       error: error instanceof Error ? error.message : "Unknown error",
     } as ExtensionMessage);

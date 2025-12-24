@@ -1,5 +1,26 @@
 // Types for the fact-check extension (inlined from shared-types for standalone build)
 
+// App mode type
+export type AppMode = "factcheck" | "explain";
+
+// Explain mode types
+export interface ExplainResponse {
+  background: string;
+  simpleSummary: string;
+  meta?: {
+    truncated?: boolean;
+    error?: string;
+  };
+}
+
+export interface TabExplainData {
+  text: string;
+  url: string;
+  result: ExplainResponse | null;
+  timestamp: number;
+  error?: string;
+}
+
 export interface FactcheckRequest {
   text: string;
   url?: string;
@@ -41,6 +62,7 @@ export interface CheckSelectionMessage {
   type: "CHECK_SELECTION";
   text: string;
   url: string;
+  mode: AppMode;
 }
 
 export interface FactcheckResultMessage {
@@ -49,5 +71,11 @@ export interface FactcheckResultMessage {
   error?: string;
 }
 
-export type ExtensionMessage = CheckSelectionMessage | FactcheckResultMessage;
+export interface ExplainResultMessage {
+  type: "EXPLAIN_RESULT";
+  payload: ExplainResponse | null;
+  error?: string;
+}
+
+export type ExtensionMessage = CheckSelectionMessage | FactcheckResultMessage | ExplainResultMessage;
 

@@ -1,6 +1,6 @@
 import { getGeminiApiKey } from "../storage/settings";
-import { MAX_CLAIMS, MAX_SOURCES } from "../constants";
-import type { FactcheckResponse, Claim, Source } from "../types";
+import { MAX_CLAIMS, MAX_SOURCES, MAX_SELECTION_CHARS } from "../constants";
+import type { FactcheckResponse, Claim, Source, ExplainResponse } from "../types";
 
 const GEMINI_API_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent";
@@ -192,6 +192,73 @@ export async function factcheckTextWithGemini(
 
   return {
     claims,
+    meta: { truncated },
+  };
+}
+
+async function generateExplanation(
+  text: string,
+  apiKey: string
+): Promise<{ background: string; simpleSummary: string }> {
+  const prompt = `You are an educational explainer helping readers understand complex text. Analyze the following text and provide:
+
+1. **Background**: Provide 2-4 sentences of contextual background that helps understand this text. Include relevant historical, scientific, political, or cultural context as appropriate.
+
+2. **Simple Summary**: Rewrite the main idea in 1-2 sentences using simple, everyday language that anyone could understand. Avoid jargon entirely.
+
+Text to analyze:
+"""
+${text}
+"""
+
+Output ONLY valid JSON in this exact format, nothing else:
+{
+  "background": "Contextual background information...",
+  "simpleSummary": "Simple explanation of the main idea..."
+}`;
+
+  try {
+    const response = await callGemini(prompt, apiKey);
+
+    // Try to extract JSON object from response
+    let jsonText = response;
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonText = jsonMatch[0];
+    }
+
+    const parsed = JSON.parse(jsonText);
+
+    return {
+      background: typeof parsed.background === "string" ? parsed.background : "",
+      simpleSummary: typeof parsed.simpleSummary === "string" ? parsed.simpleSummary : "",
+    };
+  } catch (error) {
+    console.error("Explanation generation error:", error);
+    throw new Error(
+      `Failed to generate explanation: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
+  }
+}
+
+export async function explainTextWithGemini(
+  text: string
+): Promise<ExplainResponse> {
+  const apiKey = await getGeminiApiKey();
+
+  if (!apiKey) {
+    throw new Error(
+      "Gemini API key not configured. Please set your API key in the extension settings."
+    );
+  }
+
+  const truncated = text.length > MAX_SELECTION_CHARS;
+  const processedText = truncated ? text.substring(0, MAX_SELECTION_CHARS) : text;
+
+  const result = await generateExplanation(processedText, apiKey);
+
+  return {
+    ...result,
     meta: { truncated },
   };
 }
