@@ -16,6 +16,9 @@ api/dist/
 # Shared types build output
 packages/shared-types/dist/
 
+# macOS app build output
+macos/.build/
+macos/Sources/Resources/AppIcon.iconset/
+
 # claude
 .claude/
-
